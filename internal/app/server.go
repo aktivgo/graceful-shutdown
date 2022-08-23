@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 func CreateHttpServer(
@@ -27,19 +28,25 @@ func CreateHttpServer(
 	signal.Notify(termChan, syscall.SIGTERM, syscall.SIGINT)
 
 	go func() {
-		sig := <-termChan
-
-		log.Println(sig, "received, shutdown process initiated")
-
-		if err := httpServer.Shutdown(ctx); err != nil {
-			log.Println("http server shutdown error")
+		if err := httpServer.ListenAndServe(); err != nil {
+			log.Println("http server shutdown")
 		}
 	}()
-
 	log.Println("server listening", address)
-	if err := httpServer.ListenAndServe(); err != nil {
-		log.Println("http server shutdown")
+
+	sig := <-termChan
+	log.Println(sig, "received, shutdown process initiated")
+
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer func() {
+		cancel()
+	}()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Println("http server shutdown error:", err)
 	}
+
+	log.Println("server exited properly")
 }
 
 func buildRouter(handler handler.SomethingHandler) *mux.Router {
